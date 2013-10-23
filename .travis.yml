@@ -1,0 +1,10 @@
+language: ruby
+
+rvm:
+  - "2.0.0"
+
+before_install:
+  - sudo apt-get -qq update
+  - sudo apt-get -qq install gdb
+
+script: bundle exec rspec spec
