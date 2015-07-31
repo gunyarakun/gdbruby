@@ -12,7 +12,8 @@ This is Ruby port of gdbperl.pl made by Akira Higuchi.
 
 ## Precondition
 
-Your Ruby executable must have debug symbol.
+- Your Ruby executable must have debug symbol.
+- on Linux.
 
 ## Usage
 

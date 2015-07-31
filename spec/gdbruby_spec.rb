@@ -26,6 +26,13 @@ EOF
       @target_pid = Kernel.spawn(TARGET, :pgroup => true, :out => '/dev/null', :err => '/dev/null')
     end
 
+    context 'OS' do
+      it 'should be linux' do
+        host_os = RbConfig::CONFIG['host_os']
+        expect(host_os.match(/\Alinux/)).to_not be_nil
+      end
+    end
+
     context 'With live process' do
       before(:all) do
         @output = `#{EXECUTABLE} #{@target_pid}`
