@@ -1,5 +1,7 @@
 # gdbruby.rb
 
+[![Gem Version](https://badge.fury.io/rb/gdbruby.svg)](http://badge.fury.io/rb/gdbruby)
+
 [![Build Status](https://travis-ci.org/gunyarakun/gdbruby.svg?branch=master)](https://travis-ci.org/gunyarakun/gdbruby)
 
 ## Overview
