@@ -1,5 +1,7 @@
 # gdbruby.rb
 
+[![Build Status](https://travis-ci.org/gunyarakun/gdbruby.svg?branch=master)](https://travis-ci.org/gunyarakun/gdbruby)
+
 ## Overview
 
 gdbruby.rb can output these information with live process or core.
