@@ -43,7 +43,7 @@ EOF
       context 'With core file' do
         before(:all) do
           @core_path = Tempfile.new('core')
-          puts "target_pid: #{@target_pid}"
+#          puts "target_pid: #{@target_pid}"
           system('gcore', '-o', @core_path.path, @target_pid.to_s)
           @output = `#{EXECUTABLE} #{@target_pid}`
         end
