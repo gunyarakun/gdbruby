@@ -401,9 +401,9 @@ class GDBRuby
     map
   end
 
-  def get_ruby_frame(frame_count)
+  def get_ruby_frame(frame_count, thread)
     # Accessor
-    cfp = "(ruby_current_thread->cfp + #{frame_count})"
+    cfp = "(#{thread}->cfp + #{frame_count})"
     iseq = "#{cfp}->iseq"
 
     # Check iseq
@@ -487,36 +487,38 @@ class GDBRuby
 
     thread_map = get_map_of_ruby_thread_pointer_to_gdb_thread_id
 
-    # Detect ruby running thread and change gdb thread to it
-    current_thread_pointer = @gdb.cmd_get_pointer('p ruby_current_thread', 'rb_thread_t')
-    gdb_thread_id = thread_map[current_thread_pointer]
-    raise 'Cannot find current thread id in gdb' if gdb_thread_id.nil?
-    @gdb.cmd_exec("thread #{gdb_thread_id}")
+    thread_map.each do |ruby_pointer, gdb_thread|
+      ruby_thread = "((rb_thread_t *) #{ruby_pointer})"
+      @gdb.cmd_exec("thread #{gdb_thread}")
 
-    # Show C backtrace
-    if @config['c_trace', true]
-      response = @gdb.cmd_exec('bt')
-      puts 'c_backtrace:'
-      response.each_line do |line|
-        break if line == '(gdb) '
-        puts line
+      puts "thread: #{gdb_thread}\n"
+
+      # Show C backtrace
+      if @config['c_trace', true]
+	      c_bt = @gdb.cmd_exec('bt')
+        puts 'c_backtrace:'
+        c_bt.each_line do |line|
+          break if line == '(gdb) '
+          puts line
+        end
+        puts ''
       end
-      puts ''
-    end
 
-    # Show Ruby backtrace
-    puts 'ruby_backtrace:'
-    cfp_count = @gdb.cmd_get_value('p (rb_control_frame_t *)(ruby_current_thread->stack + ruby_current_thread->stack_size) - ruby_current_thread->cfp').to_i
+      # Show Ruby backtrace
+      puts "ruby_backtrace:"
+      cfp_count = @gdb.cmd_get_value("p (rb_control_frame_t *)(#{ruby_thread}->stack + #{ruby_thread}->stack_size) - #{ruby_thread}->cfp").to_i
 
-    frame_infos = []
-    @prev_location = nil
-    # NOTE: @prev_location may not be set properly when limited by MAX_FRAMES
-    ([MAX_FRAMES, cfp_count].min - 1).downto(0).each do |count|
-      frame_info = get_ruby_frame(count)
-      frame_infos << frame_info if frame_info
-    end
-    frame_infos.reverse.each_with_index do |fi, i|
-      puts "[#{frame_infos.length - i}] #{fi[:callee]}(#{fi[:args]}) <- #{fi[:source_path_line]}"
+      frame_infos = []
+      @prev_location = nil
+      # NOTE: @prev_location may not be set properly when limited by MAX_FRAMES
+      ([MAX_FRAMES, cfp_count].min - 1).downto(0).each do |count|
+        frame_info = get_ruby_frame(count, ruby_thread)
+        frame_infos << frame_info if frame_info
+      end
+      frame_infos.reverse.each_with_index do |fi, i|
+        puts "[#{frame_infos.length - i}] #{fi[:callee]}(#{fi[:args]}) <- #{fi[:source_path_line]}"
+      end
+      puts "\n"
     end
   end
 
