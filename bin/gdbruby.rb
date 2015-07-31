@@ -487,25 +487,28 @@ class GDBRuby
 
     thread_map = get_map_of_ruby_thread_pointer_to_gdb_thread_id
 
-    thread_map.each do |ruby_pointer, gdb_thread|
+    dump_results = thread_map.map do |ruby_pointer, gdb_thread|
+      output_lines = []
+
       ruby_thread = "((rb_thread_t *) #{ruby_pointer})"
       @gdb.cmd_exec("thread #{gdb_thread}")
 
-      puts "thread: #{gdb_thread}\n"
+      output_lines << "thread: #{gdb_thread}"
+      output_lines << ''
 
       # Show C backtrace
       if @config['c_trace', true]
         c_bt = @gdb.cmd_exec('bt')
-        puts 'c_backtrace:'
+        output_lines << 'c_backtrace:'
         c_bt.each_line do |line|
           break if line == '(gdb) '
-          puts line
+          output_lines << line
         end
-        puts ''
+        output_lines << ''
       end
 
       # Show Ruby backtrace
-      puts "ruby_backtrace:"
+      output_lines << "ruby_backtrace:"
       cfp_count = @gdb.cmd_get_value("p (rb_control_frame_t *)(#{ruby_thread}->stack + #{ruby_thread}->stack_size) - #{ruby_thread}->cfp").to_i
 
       frame_infos = []
@@ -516,12 +519,13 @@ class GDBRuby
         frame_infos << frame_info if frame_info
       end
       frame_infos.reverse.each_with_index do |fi, i|
-        puts "[#{frame_infos.length - i}] #{fi[:callee]}(#{fi[:args]}) <- #{fi[:source_path_line]}"
+        output_lines << "[#{frame_infos.length - i}] #{fi[:callee]}(#{fi[:args]}) <- #{fi[:source_path_line]}"
       end
-      puts "\n"
+      output_lines.join("\n")
     end
-  end
 
+    puts dump_results.join("\n")
+  end
 end
 
 def main
