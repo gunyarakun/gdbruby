@@ -495,7 +495,7 @@ class GDBRuby
 
       # Show C backtrace
       if @config['c_trace', true]
-	      c_bt = @gdb.cmd_exec('bt')
+        c_bt = @gdb.cmd_exec('bt')
         puts 'c_backtrace:'
         c_bt.each_line do |line|
           break if line == '(gdb) '
