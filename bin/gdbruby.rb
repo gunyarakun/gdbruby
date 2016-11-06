@@ -379,6 +379,7 @@ class GDBRuby
   def show_environ
     i = 0
     puts "environ:"
+    @gdb.cmd_exec('info variables environ') # environ addr might be wrong. fix it.
     while true
       response = @gdb.cmd_get_value("p ((char **)environ)[#{i}]")
       break if response.empty? or response == '0x0'
