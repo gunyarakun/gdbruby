@@ -9,6 +9,7 @@ rvm:
 before_install:
   - sudo apt-get -qq update
   - sudo apt-get -qq install gdb
+  - gem install bundler
 
 script:
   - sudo sysctl kernel.yama.ptrace_scope=0
