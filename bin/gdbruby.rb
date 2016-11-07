@@ -232,7 +232,7 @@ class RubyInternal
       when 1
         return @gdb.cmd_get_value("p #{line_info_table}[0].line_no").to_i
       else
-        (1..line_info_size).each do |i|
+        (1...line_info_size).each do |i|
           position = @gdb.cmd_get_value("p #{line_info_table}[#{i}].position").to_i
           if position == current_position
             return @gdb.cmd_get_value("p #{line_info_table}[#{i}].line_no").to_i
@@ -240,6 +240,7 @@ class RubyInternal
             return @gdb.cmd_get_value("p #{line_info_table}[#{i - 1}].line_no").to_i
           end
         end
+        return @gdb.cmd_get_value("p #{line_info_table}[#{line_info_size - 1}].line_no").to_i
       end
     end
     0
