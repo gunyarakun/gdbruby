@@ -52,7 +52,7 @@ $ gdbruby.rb 24113 verbose_gdb=1 c_trace=1
 
 - verbose_gdb: Show request and response to/from gdb(default: false)
 - env: Show environment variables(default: true)
-- c_trace: Show C stacktrace(default:true)
+- c\_trace: Show C stacktrace(default:true)
 
 ## ToDo
 
@@ -64,10 +64,10 @@ $ gdbruby.rb 24113 verbose_gdb=1 c_trace=1
 
 ## FAQ
 
-### Why don't you call functions such like rb_vm_get_sourceline()
+### Why don't you call functions such like rb\_vm\_get\_sourceline()
 
 If you use gdbruby.rb with live process, gdb can call these functions. But if you use gdbruby.rb with core file, gdb cannot call c functions. So I re-implement these functions.
 
 ### Which version does it support?
 
-Ruby 2.0.0 only.
+Ruby 2.0, 2.1, 2.2 and 2.3 only.
