@@ -35,6 +35,7 @@ EOF
 
     context 'With live process' do
       before(:all) do
+        puts "#{EXECUTABLE} #{@target_pid}"
         @output = `#{EXECUTABLE} #{@target_pid}`
       end
 
