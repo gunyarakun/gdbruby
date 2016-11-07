@@ -151,7 +151,7 @@ class GDB
 
   def cmd_get_pointer(cmd, type)
     response = cmd_exec(cmd)
-    raise "Invalid pointer #{response}" unless response =~ /\(#{type} \*\) (0x[0-9a-f]+)/
+    raise "Invalid pointer #{response}" unless response =~ /#{type} \*\) (0x[0-9a-f]+)/
     $1
   end
 
@@ -232,7 +232,7 @@ class RubyInternal
       when 1
         return @gdb.cmd_get_value("p #{line_info_table}[0].line_no").to_i
       else
-        (1..line_info_size).each do |i|
+        (1...line_info_size).each do |i|
           position = @gdb.cmd_get_value("p #{line_info_table}[#{i}].position").to_i
           if position == current_position
             return @gdb.cmd_get_value("p #{line_info_table}[#{i}].line_no").to_i
@@ -240,6 +240,7 @@ class RubyInternal
             return @gdb.cmd_get_value("p #{line_info_table}[#{i - 1}].line_no").to_i
           end
         end
+        return @gdb.cmd_get_value("p #{line_info_table}[#{line_info_size - 1}].line_no").to_i
       end
     end
     0
@@ -346,7 +347,14 @@ class RubyInternal
   end
 
   def rb_id2str(id)
-    rstring_ptr(st_lookup('global_symbols.id_str', id))
+    str_ptr = nil
+    begin
+      str_ptr = @gdb.cmd_get_pointer("p (struct RString *) rb_id2str(#{id})", 'struct RString')
+    rescue
+      str_ptr = st_lookup('global_symbols.id_str', id)
+    end
+    raise 'cannot get label from id' if str_ptr == nil
+    rstring_ptr(str_ptr)
   end
 end
 
@@ -372,6 +380,7 @@ class GDBRuby
   def show_environ
     i = 0
     puts "environ:"
+    @gdb.cmd_exec('info variables environ') # environ addr might be wrong. fix it.
     while true
       response = @gdb.cmd_get_value("p ((char **)environ)[#{i}]")
       break if response.empty? or response == '0x0'
@@ -410,6 +419,11 @@ class GDBRuby
     iseq_ptr = @gdb.cmd_get_pointer("p #{iseq}", 'rb_iseq_t')
     if iseq_ptr.hex != 0
       # TODO: check cfp->pc is null or not
+      if @ruby_iseq_has_body
+        iseq += '->body'
+        iseq_body_ptr = @gdb.cmd_get_pointer("p #{iseq}", 'struct rb_iseq_constant_body')
+        return if iseq_body_ptr == 0
+      end
 
       iseq_type = @gdb.cmd_get_value("p #{iseq}->type").intern
 
@@ -445,7 +459,19 @@ class GDBRuby
     elsif @ri.rubyvm_cfunc_frame_p(cfp)
       # C function
 
-      mid = @gdb.cmd_get_value("p #{cfp}->me->def ? #{cfp}->me->def->original_id : #{cfp}->me->called_id")
+      me = nil
+      %W(#{cfp}->me rb_vm_frame_method_entry(#{cfp})).each { |cmd|
+        response = @gdb.cmd_exec("p #{cmd}")
+        if response =~ /(\$\d+).*0x.*/
+          me = $1
+          break
+        end
+      }
+      if me == nil
+        raise "cannot get method entry from control frame"
+      end
+
+      mid = @gdb.cmd_get_value("p #{me}->def ? #{me}->def->original_id : #{me}->called_id")
       label = @ri.rb_id2str(mid)
       if @prev_location
         cfp = @prev_location[:cfp]
@@ -510,6 +536,8 @@ class GDBRuby
       # Show Ruby backtrace
       output_lines << "ruby_backtrace:"
       cfp_count = @gdb.cmd_get_value("p (rb_control_frame_t *)(#{ruby_thread}->stack + #{ruby_thread}->stack_size) - #{ruby_thread}->cfp").to_i
+      check_iseq_body = @gdb.cmd_exec("ptype struct rb_iseq_constant_body")
+      @ruby_iseq_has_body = check_iseq_body =~ /type = struct rb_iseq_constant_body/
 
       frame_infos = []
       @prev_location = nil
