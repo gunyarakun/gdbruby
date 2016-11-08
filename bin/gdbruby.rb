@@ -243,26 +243,55 @@ class RubyInternal
     0
   end
 
-  # NOTE: This logic is slow because many commands are sent to gdb.
-  #       Fetch consts with 'ptype enum ruby_value_type' first and
-  #       check types in Ruby.
-  def rb_type(value)
-    type_str = nil
+  def rb_class2name(klass)
+    tmp_class_path = rb_tmp_class_path(rb_class_real(klass))
+    @gdb.cmd_get_value("p (char *)((struct RString *)(#{tmp_class_path}))->as.ary")
+  end
+
+  def rb_tmp_class_path(klass)
+    # TODO: Is this logic enough?
+    classname(klass)
+  end
+
+  def rb_class_real(value)
+    # FIXME: implement
+    value
+  end
+
+  def classname(klass)
+    rclass = "((struct RClass *)(#{klass}))"
+    rclass_iv_tbl = "#{rclass}->ptr->iv_tbl"
+    if @gdb.cmd_get_value("p #{rclass_iv_tbl}") != '0'
+      n = st_lookup(rclass_iv_tbl, '(st_data_t)classpath')
+      if n.nil?
+        n = st_lookup(rclass_iv_tbl, '(st_data_t)classid')
+        if n
+          raise 'FIXME: Implement classname() with classid'
+        end
+        raise 'FIXME: Implement classname() after a fail fetching classid'
+      else
+        path = n
+      end
+      raise 'classname path should be String' if rb_type(path) != 'RUBY_T_STRING'
+      return path
+    end
+    raise 'FIXME: Implement classname() after a fail fetching classpath'
+  end
+
+  def rb_class_of(value)
     # IMMEDIATE_P
     if @gdb.cmd_get_value("p (int)(#{value}) & RUBY_IMMEDIATE_MASK") != '0'
       # FIXNUM_P
       if @gdb.cmd_get_value("p (int)(#{value}) & RUBY_FIXNUM_FLAG") != '0'
-        type_str = 'RUBY_T_FIXNUM'
+        return @gdb.cmd_get_value('p rb_cFixnum')
       # FLONUM_P
       elsif @gdb.cmd_get_value("p ((int)(#{value}) & RUBY_FLONUM_MASK) == RUBY_FLONUM_FLAG") != '0'
-        type_str = 'RUBY_T_FLONUM'
+        return @gdb.cmd_get_value('p rb_cFloat')
       elsif @gdb.cmd_get_value("p (#{value}) == RUBY_Qtrue") != '0'
-        type_str = 'RUBY_T_TRUE'
+        return @gdb.cmd_get_value('p rb_cTrueClass')
       # SYMBOL_P
       elsif @gdb.cmd_get_value("p (VALUE)(#{value}) & ~(~(VALUE)0 << RUBY_SPECIAL_SHIFT) == RUBY_SYMBOL_FLAG") != '0'
-        type_str = 'RUBY_T_SYMBOL'
-      elsif @gdb.cmd_get_value("p (#{value}) == RUBY_Qundef") != '0'
-        type_str = 'RUBY_T_UNDEF'
+        return @gdb.cmd_get_value('p rb_cSymbol')
       end
     elsif @gdb.cmd_get_value("p (int)(#{value}) & RUBY_FIXNUM_FLAG") != '0'
       # special consts
@@ -270,14 +299,48 @@ class RubyInternal
       # TODO: change to map
       case const
       when 'RUBY_Qnil'
-        type_str = 'RUBY_T_NIL'
+        return @gdb.cmd_get_value('p rb_cNilClass')
       when 'RUBY_Qfalse'
-        type_str = 'RUBY_T_FALSE'
+        return @gdb.cmd_get_value('p rb_cFalseClass')
       end
-    else
-      # builtin type
-      type_str = @gdb.cmd_get_value("p (enum ruby_value_type)(((struct RBasic*)(#{value}))->flags & RUBY_T_MASK)")
     end
+    # builtin type
+    @gdb.cmd_get_value("p ((struct RBasic *)(#{value}))->klass")
+  end
+
+  # NOTE: This logic is slow because many commands are sent to gdb.
+  #       Fetch consts with 'ptype enum ruby_value_type' first and
+  #       check types in Ruby.
+  def rb_type(value)
+    # IMMEDIATE_P
+    if @gdb.cmd_get_value("p (int)(#{value}) & RUBY_IMMEDIATE_MASK") != '0'
+      # FIXNUM_P
+      if @gdb.cmd_get_value("p (int)(#{value}) & RUBY_FIXNUM_FLAG") != '0'
+        return 'RUBY_T_FIXNUM'
+      # FLONUM_P
+      elsif @gdb.cmd_get_value("p ((int)(#{value}) & RUBY_FLONUM_MASK) == RUBY_FLONUM_FLAG") != '0'
+        return 'RUBY_T_FLONUM'
+      elsif @gdb.cmd_get_value("p (#{value}) == RUBY_Qtrue") != '0'
+        return 'RUBY_T_TRUE'
+      # SYMBOL_P
+      elsif @gdb.cmd_get_value("p (VALUE)(#{value}) & ~(~(VALUE)0 << RUBY_SPECIAL_SHIFT) == RUBY_SYMBOL_FLAG") != '0'
+        return 'RUBY_T_SYMBOL'
+      elsif @gdb.cmd_get_value("p (#{value}) == RUBY_Qundef") != '0'
+        return 'RUBY_T_UNDEF'
+      end
+    elsif @gdb.cmd_get_value("p (int)(#{value}) & RUBY_FIXNUM_FLAG") != '0'
+      # special consts
+      const = @gdb.cmd_get_value("p (enum ruby_special_consts)(#{value})")
+      # TODO: change to map
+      case const
+      when 'RUBY_Qnil'
+        return 'RUBY_T_NIL'
+      when 'RUBY_Qfalse'
+        return 'RUBY_T_FALSE'
+      end
+    end
+    # builtin type
+    @gdb.cmd_get_value("p (enum ruby_value_type)(((struct RBasic*)(#{value}))->flags & RUBY_T_MASK)")
   end
 
   def rstring_ptr(value_pointer)
@@ -300,12 +363,37 @@ class RubyInternal
     key
   end
 
+  def PACKED_ENT(table, i)
+    "((#{table})->as.packed.entries)[#{i}]"
+  end
+
+  def PKEY(table, i)
+    "#{PACKED_ENT(table, i)}.key"
+  end
+
+  def PVAL(table, i)
+    "#{PACKED_ENT(table, i)}.val"
+  end
+
+  def PHASH(table, i)
+    "#{PACKED_ENT(table, i)}.hash"
+  end
+
   def st_lookup(table, key)
     hash_val = do_hash(key, table)
 
-    raise if @gdb.cmd_get_value("p (#{table})->entries_packed") != '0'
     raise if @gdb.cmd_get_value("p (#{table})->type->hash == st_numhash") == '0'
     raise if @gdb.cmd_get_value("p (#{table})->type->compare == st_numcmp") == '0'
+
+    if @gdb.cmd_get_value("p (#{table})->entries_packed") == '1'
+      i = find_packed_index(table, hash_val, key)
+      if @gdb.cmd_get_value("p #{i} < (#{table}->as.packed.real_entries)") != '0'
+        # #define PVAL(table, i) PACKED_ENT((table), (i)).val
+        value = @gdb.cmd_get_value("p #{PVAL(table, i)}")
+        return value
+      end
+      return nil
+    end
 
     # TODO: check table->entries_packed
     bin_pos = @gdb.cmd_get_value("p (#{hash_val}) % (#{table})->num_bins")
@@ -341,6 +429,20 @@ class RubyInternal
     end
     ptr =~ /(0x[0-9a-f]+)\z/
     $1
+  end
+
+  def find_packed_index(table, hash_val, key)
+    find_packed_index_from(table, hash_val, key, 0)
+  end
+
+  def find_packed_index_from(table, hash_val, key, i)
+    # NOTE: table->type->compare should be st_numcmp
+    # raise if @gdb.cmd_get_value("p (#{table})->type->compare == st_numcmp") == '0'
+
+    while @gdb.cmd_get_value("p #{i} < (#{table})->as.packed.real_entries && (#{PHASH(table, i)} != #{hash_val} || ((#{key}) != (#{PKEY(table, i)})))") != '0'
+      i += 1
+    end
+    i
   end
 
   def rb_id2str(id)
@@ -444,7 +546,7 @@ class GDBRuby
 
       self_value = @gdb.cmd_get_value("p #{cfp}->self")
       self_type = @ri.rb_type(self_value)
-      self_name = self_type == 'RUBY_T_CLASS' ? @gdb.cmd_get_value("p rb_class2name(#{cfp}->self)") : ''
+      self_name = self_type == 'RUBY_T_CLASS' ? @ri.rb_class2name("#{cfp}->self") : ''
 
       func_prefix = "#{self_name}#" unless self_name.empty?
 
