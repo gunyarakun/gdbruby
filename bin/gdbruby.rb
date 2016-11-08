@@ -444,7 +444,6 @@ class GDBRuby
 
       self_value = @gdb.cmd_get_value("p #{cfp}->self")
       self_type = @ri.rb_type(self_value)
-      puts "SELF_TYPE: #{self_type}"
       self_name = self_type == 'RUBY_T_CLASS' ? @gdb.cmd_get_value("p rb_class2name(#{cfp}->self)") : ''
 
       func_prefix = "#{self_name}#" unless self_name.empty?
