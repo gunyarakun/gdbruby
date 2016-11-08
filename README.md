@@ -70,4 +70,4 @@ If you use gdbruby.rb with live process, gdb can call these functions. But if yo
 
 ### Which version does it support?
 
-Ruby 2.0, 2.1, 2.2 and 2.3 only.
+Ruby 2.0, 2.1 only.
