@@ -201,6 +201,8 @@ class RubyInternal
   VM_FRAME_MAGIC_MASK_BITS = 8
   VM_FRAME_MAGIC_MASK = ~(~0 << VM_FRAME_MAGIC_MASK_BITS)
 
+  RUBY_VERSION_PREFIX = RUBY_VERSION[0, 4].intern
+
   def initialize(gdb)
     @gdb = gdb
   end
@@ -262,20 +264,39 @@ class RubyInternal
     rclass = "((struct RClass *)(#{klass}))"
     rclass_iv_tbl = "#{rclass}->ptr->iv_tbl"
     if @gdb.cmd_get_value("p #{rclass_iv_tbl}") != '0'
+      path = nil
       n = st_lookup(rclass_iv_tbl, '(st_data_t)classpath')
       if n.nil?
         n = st_lookup(rclass_iv_tbl, '(st_data_t)classid')
         if n
           raise 'FIXME: Implement classname() with classid'
         end
-        raise 'FIXME: Implement classname() after a fail fetching classid'
+        if path.nil?
+          path = find_class_path(klass, 0)
+        end
+        if path.nil?
+          n = st_lookup(rclass_iv_tbl, '(st_data_t)tmp_classpath')
+          if n.nil?
+            raise 'FIXME: Implement classname() after a fail fetching tmp_classpath'
+          end
+          path = n
+        end
       else
         path = n
       end
       raise 'classname path should be String' if rb_type(path) != 'RUBY_T_STRING'
       return path
     end
-    raise 'FIXME: Implement classname() after a fail fetching classpath'
+    find_class_path(klass, 0)
+  end
+
+  def find_class_path(klass, preferred)
+    rclass = "((struct RClass *)(#{klass}))"
+    rclass_const_tbl = "#{rclass}->ptr->const_tbl"
+    if @gdb.cmd_get_value("p #{rclass_const_tbl} != 0") != '0'
+      raise 'TODO: Implement find_class_path with const_tbl'
+    end
+    nil
   end
 
   def rb_class_of(value)
@@ -360,7 +381,12 @@ class RubyInternal
 
   def do_hash(key, table)
     # NOTE: table->type->hash is always st_numhash
-    key
+    if RUBY_VERSION_PREFIX == :'2.0.' || RUBY_VERSION_PREFIX == :'2.1.'
+      key
+    else
+      s1, s2 = 11, 3
+      "(st_index_t)((#{key} >> #{s1} | (#{key} << #{s2})) ^ (#{key} >> #{s2}))"
+    end
   end
 
   def PACKED_ENT(table, i)
@@ -385,7 +411,7 @@ class RubyInternal
     raise if @gdb.cmd_get_value("p (#{table})->type->hash == st_numhash") == '0'
     raise if @gdb.cmd_get_value("p (#{table})->type->compare == st_numcmp") == '0'
 
-    if @gdb.cmd_get_value("p (#{table})->entries_packed") == '1'
+    if @gdb.cmd_get_value("p (#{table})->entries_packed != 0") != '0'
       i = find_packed_index(table, hash_val, key)
       if @gdb.cmd_get_value("p #{i} < (#{table}->as.packed.real_entries)") != '0'
         # #define PVAL(table, i) PACKED_ENT((table), (i)).val
@@ -395,7 +421,6 @@ class RubyInternal
       return nil
     end
 
-    # TODO: check table->entries_packed
     bin_pos = @gdb.cmd_get_value("p (#{hash_val}) % (#{table})->num_bins")
 
     ptr = find_entry(table, key, hash_val, bin_pos)
@@ -445,14 +470,23 @@ class RubyInternal
     i
   end
 
+  # >= Ruby 2.2
+  def rb_id_to_serial(id)
+    @gdb.cmd_get_value("p (rb_id_serial_t)(((#{id}) > tLAST_OP_ID) ? ((#{id}) >> RUBY_ID_SCOPE_SHIFT) : (#{id}))")
+  end
+
+  # >= Ruby 2.2
+  def get_id_entry(num, t)
+    puts "get_id_entry(#{num}, #{t})"
+    raise 'FIXME: Implement!'
+  end
+
   def rb_id2str(id)
-    str_ptr = nil
-    begin
-      str_ptr = @gdb.cmd_get_pointer("p (struct RString *) rb_id2str(#{id})", 'struct RString')
-    rescue
+    if RUBY_VERSION_PREFIX == :'2.0.' || RUBY_VERSION_PREFIX == :'2.1.'
       str_ptr = st_lookup('global_symbols.id_str', id)
+    else
+      str_ptr = get_id_entry(rb_id_to_serial(id), 'ID_ENTRY_STR')
     end
-    raise 'cannot get label from id' if str_ptr.nil?
     rstring_ptr(str_ptr)
   end
 end
