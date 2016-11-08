@@ -350,7 +350,7 @@ class RubyInternal
     rescue
       str_ptr = st_lookup('global_symbols.id_str', id)
     end
-    raise 'cannot get label from id' if str_ptr == nil
+    raise 'cannot get label from id' if str_ptr.nil?
     rstring_ptr(str_ptr)
   end
 end
@@ -465,7 +465,7 @@ class GDBRuby
           break
         end
       }
-      if me == nil
+      if me.nil?
         raise "cannot get method entry from control frame"
       end
 
