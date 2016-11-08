@@ -470,14 +470,23 @@ class RubyInternal
     i
   end
 
+  # >= Ruby 2.2
+  def rb_id_to_serial(id)
+    @gdb.cmd_get_value("p (rb_id_serial_t)(((#{id}) > tLAST_OP_ID) ? ((#{id}) >> RUBY_ID_SCOPE_SHIFT) : (#{id}))")
+  end
+
+  # >= Ruby 2.2
+  def get_id_entry(num, t)
+    puts "get_id_entry(#{num}, #{t})"
+    raise 'FIXME: Implement!'
+  end
+
   def rb_id2str(id)
-    str_ptr = nil
-    begin
-      str_ptr = @gdb.cmd_get_pointer("p (struct RString *) rb_id2str(#{id})", 'struct RString')
-    rescue
+    if RUBY_VERSION_PREFIX == :'2.0.' || RUBY_VERSION_PREFIX == :'2.1.'
       str_ptr = st_lookup('global_symbols.id_str', id)
+    else
+      str_ptr = get_id_entry(rb_id_to_serial(id), 'ID_ENTRY_STR')
     end
-    raise 'cannot get label from id' if str_ptr.nil?
     rstring_ptr(str_ptr)
   end
 end
