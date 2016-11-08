@@ -269,7 +269,7 @@ class RubyInternal
       if n.nil?
         n = st_lookup(rclass_iv_tbl, '(st_data_t)classid')
         if n
-          raise 'FIXME: Implement classname() with classid'
+          raise 'TODO: Implement classname() with classid'
         end
         if path.nil?
           path = find_class_path(klass, 0)
@@ -277,7 +277,7 @@ class RubyInternal
         if path.nil?
           n = st_lookup(rclass_iv_tbl, '(st_data_t)tmp_classpath')
           if n.nil?
-            raise 'FIXME: Implement classname() after a fail fetching tmp_classpath'
+            raise 'TODO: Implement classname() after a fail fetching tmp_classpath'
           end
           path = n
         end
@@ -379,6 +379,14 @@ class RubyInternal
     @gdb.cmd_get_value("p (#{cfp}->flag & #{VM_FRAME_MAGIC_MASK}) == #{VM_FRAME_MAGIC_CFUNC}") != '0'
   end
 
+  def callee_from_cfunc_frame_p(cfp)
+    if RUBY_VERSION_PREFIX == :'2.0.' || RUBY_VERSION_PREFIX == :'2.1.' || RUBY_VERSION_PREFIX == :'2.2.'
+      @gdb.cmd_get_value("p #{cfp}->me->def ? #{cfp}->me->def->original_id : #{cfp}->me->called_id")
+    else
+      raise "FIXME: Implement RubyInternal#callee_from_cfunc_frame_p(#{cfp})"
+    end
+  end
+
   def do_hash(key, table)
     # NOTE: table->type->hash is always st_numhash
     if RUBY_VERSION_PREFIX == :'2.0.' || RUBY_VERSION_PREFIX == :'2.1.'
@@ -478,7 +486,7 @@ class RubyInternal
   # >= Ruby 2.2
   def get_id_entry(num, t)
     puts "get_id_entry(#{num}, #{t})"
-    raise 'FIXME: Implement!'
+    raise "FIXME: Implement RubyInternal#get_id_entry(#{num}, #{t})"
   end
 
   def rb_id2str(id)
@@ -591,20 +599,7 @@ class GDBRuby
       }
     elsif @ri.rubyvm_cfunc_frame_p(cfp)
       # C function
-
-      me = nil
-      %W(#{cfp}->me rb_vm_frame_method_entry(#{cfp})).each { |cmd|
-        response = @gdb.cmd_exec("p #{cmd}")
-        if response =~ /(\$\d+).*0x.*/
-          me = $1
-          break
-        end
-      }
-      if me.nil?
-        raise "cannot get method entry from control frame"
-      end
-
-      mid = @gdb.cmd_get_value("p #{me}->def ? #{me}->def->original_id : #{me}->called_id")
+      mid = @ri.callee_from_cfunc_frame_p(cfp)
       label = @ri.rb_id2str(mid)
       if @prev_location
         cfp = @prev_location[:cfp]
