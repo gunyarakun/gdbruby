@@ -47,8 +47,9 @@ class GDBRubyConfig
     @argv = []
 
     argvs.each do |argv|
-      if argv =~ /^(\w+)=(.+)$/
-        @config_map[$1] = $2
+      if argv =~ /^(?<key>\w+)=(?<value>.+)$/
+        r = Regexp.last_match
+        @config_map[r[:key]] = r[:value]
       else
         @argv << argv
       end
@@ -62,8 +63,8 @@ class GDBRubyConfig
 
     unless @core_or_pid
       message =
-        "Usage: #{$0} PROCESS_ID [ruby_EXECUTABLE] [OPTION=VALUE [...]]\n" +
-        "Usage: #{$0} CORE_FILE ruby_EXECUTABLE [OPTION=VALUE [...]]\n"
+        "Usage: #{$PROGRAM_NAME} PROCESS_ID [ruby_EXECUTABLE] [OPTION=VALUE [...]]\n" \
+        "Usage: #{$PROGRAM_NAME} CORE_FILE ruby_EXECUTABLE [OPTION=VALUE [...]]\n"
       puts message
       exit 1
     end
@@ -77,7 +78,7 @@ class GDBRubyConfig
           if RUBY_PLATFORM =~ /linux/
             exe = File.readlink("/proc/#{@core_or_pid}/exe")
           end
-        rescue
+        rescue SystemCallError
         end
       end
 
@@ -88,19 +89,19 @@ class GDBRubyConfig
       end
     end
 
-    raise "failed to detect ruby executable" unless exe
+    raise 'failed to detect ruby executable' unless exe
     @exe = exe
   end
 
   def [](key, default_value = nil)
-    if @config_map.has_key?(key)
+    if @config_map.key?(key)
       return case default_value
-      when TrueClass, FalseClass
-        not (@config_map[key].empty? || @config_map[key] == '0')
-      when Numeric
-        @config_map[key].to_i
-      else
-        @config_map[key]
+        when TrueClass, FalseClass
+          ! (@config_map[key].empty? || @config_map[key] == '0')
+        when Numeric
+          @config_map[key].to_i
+        else
+          @config_map[key]
       end
     end
     default_value
@@ -123,9 +124,7 @@ class GDB
       yield
       detach
     ensure
-      if @config.is_pid
-        Process.kill('CONT', @config.core_or_pid.to_i)
-      end
+      Process.kill('CONT', @config.core_or_pid.to_i) if @config.is_pid
       @gdb_stdin.close
       @gdb_stdout.close
       @gdb_stderr.close
@@ -138,8 +137,8 @@ class GDB
   end
 
   def detach
-    cmd_get_value("detach")
-    cmd_get_value("quit")
+    cmd_get_value('detach')
+    cmd_get_value('quit')
   end
 
   def log_gdb(pre, message)
@@ -152,7 +151,7 @@ class GDB
   def cmd_get_pointer(cmd, type)
     response = cmd_exec(cmd)
     raise "Invalid pointer #{response}" unless response =~ /#{type} \*\) (0x[0-9a-f]+)/
-    $1
+    Regexp.last_match[1]
   end
 
   def cmd_exec(cmd)
@@ -160,13 +159,11 @@ class GDB
     if cmd
       send_cmd = cmd.empty? ? cmd : "#{cmd}\n"
       r = @gdb_stdin.syswrite(send_cmd)
-      if r < send_cmd.length
-        raise "failed to send: [#{cmd}]"
-      end
+      raise "failed to send: [#{cmd}]" if r < send_cmd.length
     end
 
     responses = []
-    while true
+    loop do
       # TODO: specify buffer size
       begin
         buf = @gdb_stdout.sysread(COMMAND_READ_BUFFER_SIZE)
@@ -447,6 +444,7 @@ class GDBRuby
 
       self_value = @gdb.cmd_get_value("p #{cfp}->self")
       self_type = @ri.rb_type(self_value)
+      puts "SELF_TYPE: #{self_type}"
       self_name = self_type == 'RUBY_T_CLASS' ? @gdb.cmd_get_value("p rb_class2name(#{cfp}->self)") : ''
 
       func_prefix = "#{self_name}#" unless self_name.empty?
