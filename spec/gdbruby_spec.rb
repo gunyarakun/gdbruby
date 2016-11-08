@@ -1,7 +1,9 @@
 require 'spec_helper'
 require 'tempfile'
+require 'rbconfig'
 
-EXECUTABLE = File.join(File.dirname(__FILE__), '..', 'bin', 'gdbruby.rb')
+RUBY = RbConfig.ruby
+GDBRUBY = File.join(File.dirname(__FILE__), '..', 'bin', 'gdbruby.rb')
 TARGET = File.expand_path(File.join(File.dirname(__FILE__), 'target', 'call.rb'))
 
 describe 'gdbruby' do
@@ -23,7 +25,7 @@ describe 'gdbruby' do
 EOF
 
     before(:all) do
-      @target_pid = Kernel.spawn(TARGET, :pgroup => true, :out => '/dev/null', :err => '/dev/null')
+      @target_pid = Kernel.spawn("#{RUBY} #{TARGET}", :pgroup => true, :out => '/dev/null', :err => '/dev/null')
     end
 
     context 'OS' do
@@ -35,7 +37,7 @@ EOF
 
     context 'With live process' do
       before(:all) do
-        @output = `#{EXECUTABLE} #{@target_pid}`
+        @output = `#{RUBY} #{GDBRUBY} #{@target_pid}`
       end
 
       it 'should work' do
@@ -52,7 +54,7 @@ EOF
           @core_path = Tempfile.new('core')
 #          puts "target_pid: #{@target_pid}"
           system('gcore', '-o', @core_path.path, @target_pid.to_s)
-          @output = `#{EXECUTABLE} #{@target_pid}`
+          @output = `#{RUBY} #{GDBRUBY} #{@core_path.path}.#{@target_pid} #{RUBY}`
         end
 
         it 'should work' do
